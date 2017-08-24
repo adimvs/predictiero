@@ -61,6 +61,8 @@ predictit <- function(input){
 
 ## Forecast with STL model
 forecastStl <- function(x, n.ahead=30){
+  x$ds <- as.Date(x$ds,"%d.%m.%Y")
+  x <- x[order(x$ds),]
   myTs <- ts(x$y, start=1, frequency=256)
   fit.stl <- stl(myTs, s.window=256)
   sts <- fit.stl$time.series
@@ -76,7 +78,7 @@ forecastStl <- function(x, n.ahead=30){
                        pred = c(rep(NA, nrow(x)), pred),
                        lower = c(rep(NA, nrow(x)), lower),
                        upper = c(rep(NA, nrow(x)), upper),
-                       date = c(x$Date, max(x$Date) + (1:n.ahead))
+                       date = c(x$ds, max(x$ds) + (1:n.ahead))
   )
   return(output)
 }
