@@ -17,23 +17,13 @@ hello <- function(req) {
   req$x
 }
 
-createModel <- function(input){
-  #require(dplyr)
-  #require(jsonlite)
-  require(prophet)
+prophetFileForecast<- function(input,steps){
 
-  #df <- jsonlite::unserializeJSON(req$data)
-  #df$ds <- as.Date(df$ds, req$dateFormat)
-  newdata <- if(is.character(input) && file.exists(input)){
-    read.csv(input)
-  } else {
-    as.data.frame(input)
-  }
+  newdata <- read.csv(input)
 
-  m <- prophet::prophet(newdata)
-  #jsonM <- jsonlite::serializeJSON(m)
-  #jsonM
-  future <- make_future_dataframe(m, periods = 365)
+  m <- prophet(newdata)
+
+  future <- make_future_dataframe(m, periods = future)
 
   forecast <- predict(m, future)
 
@@ -43,28 +33,55 @@ createModel <- function(input){
   forecast
 }
 
-predictit <- function(input){
+prophetJsonForecast <- function(input){
 
+  newdata <- as.data.frame(input$dataset)
 
-  newdata <- if(is.character(input) && file.exists(input)){
-    read.csv(input)
-  } else {
-    as.data.frame(input)
+  #adapt input dataset
+  names(newdata)[names(newdata)=="date"] <- "ds"
+
+  m <- prophet(newdata)
+
+  future <- make_future_dataframe(m, periods = input$steps, freq = input$frequency )
+
+  forecast <- predict(m, future)
+
+  if(exists("input$options$remove_weekends") && input$options$remove_weekends==TRUE){
+
+  forecast <- forecast[which(weekdays(as.Date(forecast$ds, format = "%m/%d/%Y"))
+
+                             %in% c('Monday','Tuesday', 'Wednesday', 'Thursday', 'Friday')), ]
+
   }
 
-  input$ds <- as.Date(input$ds, "%Y-%m-%d")
+  #adapt returning dataset
+  df = forecast[c("ds","yhat","yhat_lower","yhat_upper")]
+  names(df)[names(df)=="ds"] <- "date"
+  names(df)[names(df)=="yhat"] <- "ypred"
+  names(df)[names(df)=="yhat_lower"] <- "ypred_min"
+  names(df)[names(df)=="yhat_upper"] <- "ypred_max"
+  df
+}
 
-  result.stl <- forecastStl(rates, n.ahead = 90)
+stlJsonForecast <- function(input){
+
+
+  newdata <- as.data.frame(input$dataset)
+
+  newdata$date <- as.Date(input$ds, "%Y-%m-%d")
+
+  result.stl <- forecastStl(rates, n.ahead = input$steps)
 
   result.stl
 }
 
 ## Forecast with STL model
-forecastStl <- function(x, n.ahead=30){
+forecastStl <- function(x, n.ahead=300){
   x$ds <- as.Date(x$ds,"%d.%m.%Y")
   x <- x[order(x$ds),]
   myTs <- ts(x$y, start=1, frequency=256)
   fit.stl <- stl(myTs, s.window=256)
+  #fit.stl <- nnetar(myTs)
   sts <- fit.stl$time.series
   trend <- sts[,"trend"]
   fore <- forecast(fit.stl, h=n.ahead, level=95)
