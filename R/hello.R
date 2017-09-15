@@ -33,24 +33,59 @@ prophetFileForecast<- function(input,steps){
   forecast
 }
 
-prophetJsonForecast <- function(input){
+fbprophet <- function(input, steps=5 ,frequency='d', remove_weekends=FALSE){
 
-  newdata <- as.data.frame(input$dataset)
+  newdata <- if(is.character(input) && file.exists(input)){
+    read.csv(input)
+    } else {
+       as.data.frame(input)
+    }
+
+  #adapt input dataset
+  names(newdata)[names(newdata)=="date"] <- "ds"
+  names(newdata)[names(newdata)=="value"] <- "y"
+
+  m <- prophet(newdata)
+
+  future <- make_future_dataframe(m, periods = steps, freq = frequency )
+
+  forecast <- predict(m, future)
+
+  if(remove_weekends==TRUE){
+
+  forecast <- forecast[which(weekdays(as.Date(forecast$ds, format = "%m/%d/%Y"))
+
+                             %in% c('Monday','Tuesday', 'Wednesday', 'Thursday', 'Friday')), ]
+
+  }
+
+  #adapt returning dataset
+  df = forecast[c("ds","yhat","yhat_lower","yhat_upper")]
+  names(df)[names(df)=="ds"] <- "date"
+  names(df)[names(df)=="yhat"] <- "value_pred"
+  names(df)[names(df)=="yhat_lower"] <- "value_pred_min"
+  names(df)[names(df)=="yhat_upper"] <- "value_pred_max"
+  df
+}
+
+testFunction <- function(input,steps,frequency,remove_weekends){
+
+  newdata <- as.data.frame(input)
 
   #adapt input dataset
   names(newdata)[names(newdata)=="date"] <- "ds"
 
   m <- prophet(newdata)
 
-  future <- make_future_dataframe(m, periods = input$steps, freq = input$frequency )
+  future <- make_future_dataframe(m, periods = steps, freq = frequency )
 
   forecast <- predict(m, future)
 
-  if(exists("input$options$remove_weekends") && input$options$remove_weekends==TRUE){
+  if(exists("remove_weekends") && remove_weekends==TRUE){
 
-  forecast <- forecast[which(weekdays(as.Date(forecast$ds, format = "%m/%d/%Y"))
+    forecast <- forecast[which(weekdays(as.Date(forecast$ds, format = "%m/%d/%Y"))
 
-                             %in% c('Monday','Tuesday', 'Wednesday', 'Thursday', 'Friday')), ]
+                               %in% c('Monday','Tuesday', 'Wednesday', 'Thursday', 'Friday')), ]
 
   }
 
@@ -79,6 +114,8 @@ stlJsonForecast <- function(input){
 forecastStl <- function(x, n.ahead=300){
   x$ds <- as.Date(x$ds,"%d.%m.%Y")
   x <- x[order(x$ds),]
+
+
   myTs <- ts(x$y, start=1, frequency=256)
   fit.stl <- stl(myTs, s.window=256)
   #fit.stl <- nnetar(myTs)
